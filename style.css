@@ -1,0 +1,33 @@
+body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+.map-overlay {
+    position: absolute; top: 5px; left: 5px; bottom: 5px; width: 280px;
+    background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    z-index: 2; max-height: 95vh; overflow-y: auto;
+}
+        
+h1 { font-size: 16px; margin: 0 0 5px; }
+p { font-size: 10px; color: #444; margin: 5px 0; line-height: 1.4; }
+
+.controls { margin: 15px 0; }
+#slider { width: 100%; cursor: pointer; }
+.year-display { font-weight: bold; color: #2171b5; }
+
+.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
+.kpi { background: #f8f9fa; border: 1px solid #eee; border-radius: 4px; padding: 6px; text-align: center; }
+.kpi.full { grid-column: span 2; background: #e3f2fd; }
+.kpi .label { font-size: 10px; color: #777; }
+.kpi .value { font-size: 13px; font-weight: bold; }
+
+#hoverText { 
+    margin: 15px 0 8px; padding: 8px 0; border-top: 1px solid #eee;
+    font-weight: bold; font-size: 13px; color: #222; min-height: 18px;
+}
+
+.legend-row { display: flex; align-items: center; font-size: 11px; margin-bottom: 2px; }
+.swatch { width: 15px; height: 15px; margin-right: 8px; }
+
+.chart-wrap { height: 180px; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; }
+.chart-title { font: 12px bold; margin:0 0 5px;}
