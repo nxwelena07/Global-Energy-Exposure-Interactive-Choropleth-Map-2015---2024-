@@ -1,1 +1,1 @@
-# Global-Energy-Exposure-Interactive-Choropleth-Map-2015---2024-
+# Global-Energy-Exposure-Interactive-Choropleth-Map
