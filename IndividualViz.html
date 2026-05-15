@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Global Energy Exposure (HS27)</title>
+    <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.17.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.17.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link href="style.css" rel="stylesheet">
+
+    <style>
+        body { margin: 0; padding: 0; height:100%; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+
+    <div class="map-overlay">
+        <h1>Global Energy Exposure</h1>
+        <p>The choropleth shows Proportion of Energy HS27 imports relative to All imports by country between 2015 and 2024 based on the UN Comtrade Database.</p>
+
+        <div class="controls">
+            <div><span class="year-display" id="year-value">2015</span></div>
+            <input id="slider" type="range" min="2015" max="2024" step="1" value="2015">
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi">
+                <div class="label">Global HS27 Imports</div>
+                <div class="value" id="kpiHS27">-</div>
+            </div>
+            <div class="kpi">
+                <div class="label">Global All Imports</div>
+                <div class="value" id="kpiAll">-</div>
+            </div>
+            <div class="kpi full">
+                <div class="label">Global Energy Exposure(%)</div>
+                <div class="value" id="kpiExposure">-</div>
+            </div>
+        </div>
+
+        <div id="hoverText">Year: 2015 · Exposure(%): —</div>
+
+        <div id="legend"></div>
+
+        <div class="chart-wrap">
+            <div class="chart-title">Historical Trend</div>
+            <canvas id="lineChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        var CSV_PATH = "./map_metrics_hs27_exposure_2015_2024_from_raw.csv";
+        var YEARS = d3.range(2015, 2025);
+        var COLORS = ['#f7fbff','#deebf7','#c6dbef','#9ecae1','#6baed6','#4292c6','#2171b5','#08519c','#08306b'];
+
+        var state = {
+            year: 2015,
+            data: {},          
+            breaks: [],
+            hoveredIso3: null,
+            isoList: []       
+        };
+
+        function resetHoverText(){
+            document.getElementById("hoverText").textContent = 
+            "Year: " + state.year + " · Exposure(%): —";
+        }
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoibnh3ZWxlbmEwNyIsImEiOiJjbWtwYWpodmIwZGkxM2RzYXlnenp2Z28xIn0.bpRvqWSafFDlVQPi54uwlA';
+
+        var map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/nxwelena07/cml9a6wh0000a01s84wvh6zx0',
+            center: [30, 45],
+            zoom: 2,
+            projection: 'globe'
+        });
+
+        map.addControl(new mapboxgl.NavigationControl());
+        map.addControl(new mapboxgl.ScaleControl(), 'bottom-right');
+        map.dragRotate.disable();
+        map.touchZoomRotate.disableRotation();
+
+        var chart = new Chart(document.getElementById("lineChart").getContext("2d"), {
+            type: "line",
+            data: {
+                labels: YEARS.map(String),
+                datasets: [{
+                    data: YEARS.map(function(){ return null; }),
+                    borderColor: "#2171b5",
+                    tension: 0.3,
+                    pointRadius: 2,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { font: { size: 9 } } },
+                    y: { beginAtZero: true, ticks: { font: { size: 9 } } }
+                }
+            }
+        });
+
+        function updateChart(iso3) {
+            var dataPoints = YEARS.map(function(y){
+                if (iso3) {
+                    var entry = (state.data[y] && state.data[y][iso3]) ? state.data[y][iso3] : null;
+                    return entry ? entry.val : null;
+                } else {
+                    var hs = 0, total = 0;
+                    var yearData = state.data[y] || {};
+                    Object.keys(yearData).forEach(function(k){
+                        hs += yearData[k].hs;
+                        total += yearData[k].all;
+                    });
+                    return (total > 0) ? (hs / total) * 100 : null;
+                }
+            });
+
+            chart.data.datasets[0].data = dataPoints;
+            chart.update();
+        }
+
+        function updateDataDisplay() {
+            var currentYearData = state.data[state.year] || {};
+            var hsSum = 0, allSum = 0;
+
+            Object.keys(currentYearData).forEach(function(iso3){
+                var d = currentYearData[iso3];
+                hsSum += d.hs;
+                allSum += d.all;
+            });
+
+            document.getElementById("kpiHS27").innerText = (hsSum / 1e12).toFixed(1) + "T";
+            document.getElementById("kpiAll").innerText  = (allSum / 1e12).toFixed(1) + "T";
+            document.getElementById("kpiExposure").innerText = (allSum > 0) ? ((hsSum / allSum) * 100).toFixed(2) + "%" : "—";
+
+
+            if (map.getLayer("fill-layer")) {
+                state.isoList.forEach(function(iso3){
+                    var entry = currentYearData[iso3];
+                    map.setFeatureState(
+                        { source: "countries", sourceLayer: "country_boundaries", id: iso3 },
+                        { exp_imp_pct: entry ? entry.val : null }
+                );
+                });
+            } 
+
+            if (!state.hoveredIso3) {resetHoverText();updateChart(null);}
+        }
+
+        function initUI() {
+            var legendDiv = document.getElementById("legend");
+            var html = "";
+            for (var i = 0; i < state.breaks.length - 1; i++) {
+                html += 
+                '<div class="legend-row">' + '<div class="swatch" style="background:' + COLORS[i] + '"></div>' +
+                state.breaks[i].toFixed(1) + '% - ' + state.breaks[i+1].toFixed(1) + '%</div>';
+            }
+            html += '<div class="legend-row"><div class="swatch" style="background:#eee"></div>No data</div>';
+            legendDiv.innerHTML = html;
+
+            var slider = document.getElementById("slider");
+            slider.addEventListener("input", function(e){
+                state.year = parseInt(e.target.value);
+                document.getElementById("year-value").innerText = state.year;
+                updateDataDisplay();
+            });
+            updateDataDisplay();
+        }
+
+        function onMapReady() {
+            map.addSource("countries", {
+            type: "vector",
+            url: "mapbox://mapbox.country-boundaries-v1",
+            promoteId: "iso_3166_1_alpha_3"
+        });
+
+        var stepExpression = ["step", ["to-number", ["feature-state", "exp_imp_pct"]], COLORS[0]];
+        for (var i = 1; i < 9; i++) {stepExpression.push(state.breaks[i], COLORS[i]);}
+
+        map.addLayer({
+            id: "fill-layer",
+            type: "fill",
+            source: "countries",
+            "source-layer": "country_boundaries",
+            paint: {"fill-color": ["case",["==", ["feature-state", "exp_imp_pct"], null],"#eee",stepExpression],"fill-opacity": 0.8}
+        });
+
+        map.addLayer({
+            id: "line-layer",
+            type: "line",
+            source: "countries",
+            "source-layer": "country_boundaries",
+            paint:{"line-color": "#f1c40f", "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2, 0]}
+        });
+
+        map.on("mousemove", "fill-layer", function(e){
+            if (!e.features || e.features.length === 0) return;
+
+            var f = e.features[0];
+            var iso3 = f.id; 
+            var name = (f.properties && f.properties.name_en) ? f.properties.name_en : iso3;
+
+            if (state.hoveredIso3 !== iso3) {
+                if (state.hoveredIso3) {
+                    map.setFeatureState(
+                        { source: "countries", sourceLayer: "country_boundaries", id: state.hoveredIso3 },
+                        { hover: false }
+                    );
+                }
+                state.hoveredIso3 = iso3;
+                map.setFeatureState(
+                    { source: "countries", sourceLayer: "country_boundaries", id: iso3 },
+                    { hover: true }
+                );
+                updateChart(iso3);
+            }
+
+            var yearData = state.data[state.year] || {};
+            var entry = yearData[iso3] || null;
+            var valText = (entry && entry.val !== null) ? entry.val.toFixed(2) + "%" : "—";
+
+            document.getElementById("hoverText").innerHTML =
+            name + " (" + iso3 + ") · Year: " + state.year + " · Exposure(%): " + valText;
+        });
+
+        map.on("mouseleave", "fill-layer", function(){
+            if (state.hoveredIso3) {
+                map.setFeatureState(
+                    { source: "countries", sourceLayer: "country_boundaries", id: state.hoveredIso3 },
+                    { hover: false }
+                );
+            }
+            state.hoveredIso3 = null;
+            resetHoverText();
+            updateChart(null);
+        });
+
+            updateDataDisplay();
+        }
+
+        d3.csv(CSV_PATH).then(function(data){
+            var allValues = [];
+            var isoSet = new Set();
+
+            YEARS.forEach(function(y){ state.data[y] = {}; });
+
+            data.forEach(function(d){
+                var y = parseInt(d.year);
+                var iso = d.iso3 ? d.iso3.trim() : null;
+                var pct = parseFloat(d.exp_imp_pct);
+
+                if (iso && state.data[y]) {
+                    state.data[y][iso] = {
+                        val: isFinite(pct) ? pct : null,
+                        hs: parseFloat(d.hs27_import_value) || 0,
+                        all: parseFloat(d.all_import_value) || 0
+                    };
+                    isoSet.add(iso);
+                    if (isFinite(pct)) allValues.push(pct);
+                }
+            });
+
+            state.isoList = Array.from(isoSet);
+
+            allValues.sort(d3.ascending);
+            state.breaks = [d3.min(allValues)];
+            for (var i = 1; i < 9; i++) state.breaks.push(d3.quantile(allValues, i/9));
+            state.breaks.push(d3.max(allValues));
+
+            initUI();
+
+            if (map.loaded()) onMapReady(); else map.on("load", onMapReady);
+        });
+    </script>
+</body>
+
+</html>
